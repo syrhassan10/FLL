@@ -1,0 +1,129 @@
+from spike import PrimeHub, LightMatrix, Button, StatusLight, ForceSensor, MotionSensor, Speaker, ColorSensor, App, DistanceSensor, Motor, MotorPair
+from spike.control import wait_for_seconds, wait_until, Timer
+from math import *
+
+hub = PrimeHub()
+drive_base = MotorPair('A', 'E')
+LeftMotor = Motor('A')
+arm = Motor('D')
+timer = Timer()
+WHEEL_DIAMETER = 8.8 # small spike wheel in cm
+drive_base.set_stop_action('brake')
+
+'''
+Turns the robot left or right as long as the angle is not larger than 180
+Angle is relative to current robot heading (resets heading prior to turning)
+'''
+def turn(target_heading, speed = 20, momentum_error = 2):
+    # speed must be positive
+    speed = abs(speed)
+
+    # reset yaw angle to 0
+    hub.motion_sensor.reset_yaw_angle()
+
+    # get initial robot heading
+    robot_heading = hub.motion_sensor.get_yaw_angle()
+
+    # keep turning until goal is reached while accounting for potential momentum error
+    while(abs(robot_heading)<(abs(target_heading) - momentum_error)):
+        # turns the robot left or right depending on the target heading sign (positive or negative)
+        right_speed = -int(speed*target_heading/abs(target_heading))
+        left_speed = int(speed*target_heading/abs(target_heading))
+        drive_base.start_tank(left_speed, right_speed)
+        # update heading measurement
+        robot_heading = hub.motion_sensor.get_yaw_angle()
+
+    # stop turning
+    drive_base.stop()
+
+'''
+Move straight for a given distance. Use IMU to keep yourself straight
+Distance is in cm
+Speed determines if robot is moving forward or backward
+'''
+def move_straight_distance(target_distance, speed = 50, target_heading = 0, kp = 1.5):
+
+    # check if moving forward or backward
+    direction = int(speed/abs(speed))
+
+    # reset motor encoder sensor reading
+    LeftMotor.set_degrees_counted(0)
+
+    # get initial position
+    # distance = degrees/360 * circumference
+    # circumference. = pi*diameter
+    current_position = LeftMotor.get_degrees_counted() / 360 * WHEEL_DIAMETER * 3.141592
+
+    # loop until target distance is reached
+    while (abs(current_position)<abs(target_distance)):
+        # calculare heading offset of the robot
+        heading_error = target_heading- hub.motion_sensor.get_yaw_angle()
+
+        # calculate correction to speed based on heading offset
+        right_speed = int(speed - heading_error*kp*direction)
+        left_speed = int(speed + heading_error*kp*direction)
+        # drive the robot
+        drive_base.start_tank(left_speed, right_speed)
+
+        # update wheel position reading
+        current_position = LeftMotor.get_degrees_counted() / 360 * WHEEL_DIAMETER * 3.141592
+
+    drive_base.stop()
+
+
+
+'''
+Move straight for a given time. Use IMU to keep yourself straight
+Distance is in cm
+Speed determines if robot is moving forward or backward
+'''
+def move_straight_time(target_duration, speed, target_heading = 0, kp = 1):
+
+    # check if moving forward or backward
+    direction = int(speed/abs(speed))
+
+    # reset motor encoder sensor reading
+    LeftMotor.set_degrees_counted(0)
+
+    # get initial position
+    # distance = degrees/360 * circumference
+    # circumference. = pi*diameter
+    current_position = LeftMotor.get_degrees_counted() / 360 * WHEEL_DIAMETER * 3.141592
+
+    # reset the timer
+    timer.reset()
+    # loop until target distance is reached
+    while (timer.now()<target_duration):
+        # calculare heading offset of the robot
+        heading_error = target_heading- hub.motion_sensor.get_yaw_angle()
+
+        # calculate correction to speed based on heading offset
+        right_speed = int(speed - heading_error*kp*direction)
+        left_speed = int(speed + heading_error*kp*direction)
+        # drive the robot
+        drive_base.start_tank(left_speed, right_speed)
+
+    drive_base.stop()
+
+# M8 from right launch area
+arm.run_to_position(0)
+hub.motion_sensor.reset_yaw_angle()
+move_straight_distance(33, -25, kp = -1.5)
+move_straight_distance(10, 40)
+turn(-45)
+# Move towards M7
+move_straight_distance(47, -40, -45, kp = -1.5)
+turn(90)
+# M7
+move_straight_time(3, -35, 90, kp = -1.5)
+move_straight_time(1, 30, 90, kp = 1.5)
+move_straight_time(2, -35, 90, kp = -1.5)
+move_straight_time(1, 30, 90, kp = 1.5)
+move_straight_time(2.5, -35, 90, kp = -1.5)
+move_straight_distance(11, 25, 90, kp = 1.5)
+# M15
+turn(-180, 70)
+turn(-90)
+#move_straight_distance(70, -40, -90, kp = -1.5)
+# M9 by hand
+move_straight_distance(100, -65, -90, kp = -1.5)
