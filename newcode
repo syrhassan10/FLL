@@ -1,0 +1,174 @@
+from spike import PrimeHub, LightMatrix, Button, StatusLight, ForceSensor, MotionSensor, Speaker, ColorSensor, App, DistanceSensor, Motor, MotorPair
+from spike.control import wait_for_seconds, wait_until, Timer
+from math import *
+
+hub = PrimeHub()
+drive_base = MotorPair('C', 'F')
+LeftMotor = Motor('C')
+RightMotor = Motor('F')
+tail = Motor('A')
+arm = Motor('E')
+r_col = ColorSensor('D')
+l_col = ColorSensor('B')
+timer = Timer()
+WHEEL_DIAMETER = 5.6 # small spike wheel in cm
+drive_base.set_stop_action('brake')
+
+'''
+Turns the robot left or right as long as the angle is not larger than 180
+Angle is relative to current robot heading (resets heading prior to turning)
+'''
+def turn(target_heading, speed, momentum_error = 0):
+    # speed must be positive
+    speed = abs(speed)
+
+    # reset yaw angle to 0
+    hub.motion_sensor.reset_yaw_angle()
+
+    # get initial robot heading
+    robot_heading = hub.motion_sensor.get_yaw_angle()
+
+    # keep turning until goal is reached while accounting for potential momentum error
+    while(abs(robot_heading)<(abs(target_heading) - momentum_error)):
+        # turns the robot left or right depending on the target heading sign (positive or negative)
+        right_speed = -int(speed*target_heading/abs(target_heading))
+        left_speed = int(speed*target_heading/abs(target_heading))
+        drive_base.start_tank(left_speed, right_speed)
+        # update heading measurement
+        robot_heading = hub.motion_sensor.get_yaw_angle()
+
+    # stop turning
+    drive_base.stop()
+
+'''
+Move straight for a given distance. Use IMU to keep yourself straight
+Distance is in cm
+Speed determines if robot is moving forward or backward
+'''
+def go(target_distance, speed, target_heading, kp = 1.5):
+
+    # check if moving forward or backward
+    direction = int(speed/abs(speed))
+
+    # reset motor encoder sensor reading
+    LeftMotor.set_degrees_counted(0)
+
+    # get initial position
+    # distance = degrees/360 * circumference
+    # circumference. = pi*diameter
+    current_position = LeftMotor.get_degrees_counted() / 360 * WHEEL_DIAMETER * 3.141592
+
+    # loop until target distance is reached
+    while (abs(current_position)<abs(target_distance)):
+        # calculare heading offset of the robot
+        heading_error = target_heading- hub.motion_sensor.get_yaw_angle()
+
+        # calculate correction to speed based on heading offset
+        right_speed = int(speed - heading_error*kp*direction)
+        left_speed = int(speed + heading_error*kp*direction)
+        # drive the robot
+        drive_base.start_tank(left_speed, right_speed)
+
+        # update wheel position reading
+        current_position = LeftMotor.get_degrees_counted() / 360 * WHEEL_DIAMETER * 3.141592
+
+    drive_base.stop()
+
+
+
+'''
+Move straight for a given time. Use IMU to keep yourself straight
+Distance is in cm
+Speed determines if robot is moving forward or backward
+'''
+def time(target_duration, speed, target_heading, kp = 1.5):
+
+    # check if moving forward or backward
+    direction = int(speed/abs(speed))
+
+    # reset motor encoder sensor reading
+    LeftMotor.set_degrees_counted(0)
+
+    # get initial position
+    # distance = degrees/360 * circumference
+    # circumference. = pi*diameter
+    current_position = LeftMotor.get_degrees_counted() / 360 * WHEEL_DIAMETER * 3.141592
+
+    # reset the timer
+    timer.reset()
+    # loop until target distance is reached
+    while (timer.now()<target_duration):
+        # calculare heading offset of the robot
+        heading_error = target_heading- hub.motion_sensor.get_yaw_angle()
+
+        # calculate correction to speed based on heading offset
+        right_speed = int(speed - heading_error*kp*direction)
+        left_speed = int(speed + heading_error*kp*direction)
+        # drive the robot
+        drive_base.start_tank(left_speed, right_speed)
+
+    drive_base.stop()
+
+#go: cm/time; speed; heading; kp = 1.5
+#turn: angle; speed; error = 0
+
+#start from left_launch
+hub.motion_sensor.reset_yaw_angle()
+
+turn(-40, 20)
+go(95, 40, -40, kp = 1)
+turn(130, 10)
+go(5, -50, 130, kp = -1)
+
+arm.run_for_degrees(-170)
+go(15, 40, 130, kp = 1)
+go(3, -40, 130, kp = 1)
+arm.run_for_seconds(3,100)
+
+# this the start for the mission color blue 
+go(20, -60, 130, kp = -1)
+
+turn(-90, 20)
+arm.run_for_seconds(1.5,-30)
+
+go(8, 20, -90, kp = 0.5)
+turn(60, 20)
+
+# the music area mission 
+arm.run_for_seconds(1.5,30)
+go(20, 70, 60, kp = 1)
+turn(-70, 20)
+
+
+go(60, 60, -70, kp = 1)
+go(10, -60, -70, kp = -0.5)
+
+#the final area mission
+turn(90, 20)
+go(40, 60, 90, kp = 1)
+
+turn(135, 20)
+drive_base.move_tank(1, 'seconds', left_speed=75, right_speed=75)
+drive_base.move_tank(2, 'seconds', left_speed=-75, right_speed=-75)
+
+raise SystemExit
+
+
+
+'''
+
+this is the code if we want to do the mission in the middle. its so annoying 
+go(16, -10, 130, kp = -1)
+turn(-50, 20)
+arm.run_for_degrees(-180,20)
+
+go(29, 20, -50, kp = 0.5)
+
+
+drive_base.move_tank(2, 'cm', left_speed=-25, right_speed=-25)
+drive_base.move_tank(2, 'cm', left_speed=25, right_speed=25)
+drive_base.move_tank(2, 'cm', left_speed=-25, right_speed=-25)
+drive_base.move_tank(2, 'cm', left_speed=25, right_speed=25)
+drive_base.move_tank(2, 'cm', left_speed=-25, right_speed=-25)
+'''
+
